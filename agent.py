@@ -1,8 +1,17 @@
-import random
+
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
+from collections import defaultdict
+from collections import Counter
 
+
+def multi_dimensions(n, type):
+  """ Creates an n-dimension dictionary where the n-th dimension is of type 'type'
+  """
+  if n<=1:
+    return type()
+  return defaultdict(lambda:multi_dimensions(n-1, type))
 
 class LearningAgent(Agent):
     """An agent that learns to drive in the smartcab world."""
@@ -12,15 +21,18 @@ class LearningAgent(Agent):
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
+        self.alpha=0.1
         self.gamma=0.5
-        self.Q=[[0 for j in range(6)] for i in range(8)]
+        self.Q=multi_dimensions(2, Counter)
+        self.actions=Environment.valid_actions
+
 
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
         # 2-dimension array Q have used to save Q values for each state
-        self.Q= [[0 for j in range(6)] for i in range(8)]
+        # self.Q= [[0 for j in range(4)] for i in range(8)]
 
 
     def update(self, t):
@@ -30,69 +42,44 @@ class LearningAgent(Agent):
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
-        self.state = inputs['location']
-        self.heading=inputs['heading']
+        self.state = (self.next_waypoint, inputs['light'], inputs['oncoming'],inputs['left'])
+        print(self.state)
 
         # TODO: Select action according to your policy
-        # Extract Q of possible actions: forward, left and right
-        #In case of possible action is out of borders, make it equal -100
-        x_forw=self.state[0]+self.heading[0]-1
-        y_forw=self.state[1]+self.heading[1]-1
-        if (x_forw>=0 and x_forw<=7) and (y_forw>=0 and y_forw<=5):
-            Q_forward=self.Q[x_forw][y_forw]
-        else: Q_forward=-100
+        proposed_action=None
+        self.Q[self.state][self.state[0]]=self.Q[self.state][self.state[0]]+0.1
+        maxQ=max(self.Q[self. state][next_action] for next_action in self.actions)
+        Q_actions=[]
+        for next_action in self.actions:
+            Q_actions.append(self.Q[self.state][next_action])
+            if (self.Q[self.state][next_action]==maxQ  and self.isActionOK(next_action)==True):
+                proposed_action=next_action
+                print("Q learing works",proposed_action)
+        print (Q_actions)
 
-        x_left=self.state[0] +self.heading[1]-1
-        y_left=self.state[1] -self.heading[0]-1
-        if (x_left>=0 and x_left<=7) and (y_left>=0 and y_left<=5):
-            Q_left = self.Q[x_left][y_left]
-        else: Q_left=-100
 
-        x_right=self.state[0]-self.heading[1]-1
-        y_right=self.state[1]+ self.heading[0]-1
-        if (x_right>=0 and x_right<=7) and (y_right>=0 and y_right<=5):
-            Q_right = self.Q[x_right][y_right]
-        else: Q_right=-100
 
-        #Make actions of stop on the crossroad not very utile
-        Q_none=-1
-
-        #Increase Q +1 in case of action suggested by planner
-        #In case of prohibited by traffic rules action makes Q=-100
-        if self.next_waypoint == 'right':
-            Q_right=Q_right+1
-            if inputs['light'] == 'red' and inputs['left'] == 'forward':
-                Q_right=-100
-        elif self.next_waypoint == 'forward':
-            Q_forward = Q_forward+1
-            if inputs['light'] == 'red':
-                Q_forward=-100
-        elif self.next_waypoint == 'left':
-            Q_left = Q_left+1
-            if inputs['light'] == 'red' or (inputs['oncoming'] == 'forward' or inputs['oncoming'] == 'right'):
-                Q_left=-100
-        #action = None
-
-        # Execute action the best action by Q and get reward
-        if (Q_forward>=Q_left) and (Q_forward>=Q_right) and (Q_forward>=Q_none):
-            self.next_waypoint='forward'
-            Q_action=Q_forward
-        elif (Q_left>=Q_forward) and (Q_left>=Q_right) and (Q_left>=Q_none):
-            self.next_waypoint = 'left'
-            Q_action = Q_left
-        elif (Q_right >= Q_forward) and (Q_right >= Q_left) and (Q_right >= Q_none):
-            self.next_waypoint = 'right'
-            Q_action = Q_right
-
-        action = self.next_waypoint
+        action=proposed_action
         reward = self.env.act(self, action)
-
+        next_state = (self.next_waypoint, inputs['light'], inputs['oncoming'], inputs['left'])
         # TODO: Learn policy based on state, action, reward
         #Learning policy implemented by recording the Q value to Q matrix for particular state
-        self.Q[self.state[0]-1][self.state[1]-1]=reward+self.gamma*Q_action
-        #print self.Q
+        self.Q[self.state][action] = (1.0 - self.alpha) * self.Q[self.state][action] + self.alpha * (
+        reward + self.gamma * max(self.Q[next_state][next_action] for next_action in self.actions))
         print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 
+    def isActionOK(self,action):
+        action_okay = True
+        if action == 'right':
+            if self.state[1] == 'red' and self.state[3] == 'forward':
+                action_okay = False
+        elif action == 'forward':
+            if self.state[1] == 'red':
+                action_okay = False
+        elif action == 'left':
+            if self.state[1] == 'red' or (self.state[2] == 'forward' or self.state[2] == 'right'):
+                action_okay = False
+        return action_okay
 
 def run():
     """Run the agent for a finite number of trials."""
@@ -105,6 +92,8 @@ def run():
     # Now simulate it
     sim = Simulator(e, update_delay=1.0)  # reduce update_delay to speed up simulation
     sim.run(n_trials=10)  # press Esc or close pygame window to quit
+
+
 
 
 if __name__ == '__main__':
