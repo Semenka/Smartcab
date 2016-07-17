@@ -1,4 +1,4 @@
-
+import random
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
@@ -21,7 +21,7 @@ class LearningAgent(Agent):
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
-        self.alpha=0.1
+        self.alpha=0.5
         self.gamma=0.5
         self.Q=multi_dimensions(2, Counter)
         self.actions=Environment.valid_actions
@@ -31,8 +31,6 @@ class LearningAgent(Agent):
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
-        # 2-dimension array Q have used to save Q values for each state
-        # self.Q= [[0 for j in range(4)] for i in range(8)]
 
 
     def update(self, t):
@@ -43,19 +41,19 @@ class LearningAgent(Agent):
 
         # TODO: Update state
         self.state = (self.next_waypoint, inputs['light'], inputs['oncoming'],inputs['left'])
-        print(self.state)
+        #print(self.state)
 
         # TODO: Select action according to your policy
-        proposed_action=None
+        proposed_action=random.choice(Environment.valid_actions)
         self.Q[self.state][self.state[0]]=self.Q[self.state][self.state[0]]+0.1
         maxQ=max(self.Q[self. state][next_action] for next_action in self.actions)
         Q_actions=[]
         for next_action in self.actions:
             Q_actions.append(self.Q[self.state][next_action])
-            if (self.Q[self.state][next_action]==maxQ  and self.isActionOK(next_action)==True):
+            if (self.Q[self.state][next_action]==maxQ):
                 proposed_action=next_action
-                print("Q learing works",proposed_action)
-        print (Q_actions)
+                #print("Q learing works",proposed_action)
+        #print (Q_actions)
 
 
 
@@ -67,19 +65,6 @@ class LearningAgent(Agent):
         self.Q[self.state][action] = (1.0 - self.alpha) * self.Q[self.state][action] + self.alpha * (
         reward + self.gamma * max(self.Q[next_state][next_action] for next_action in self.actions))
         print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
-
-    def isActionOK(self,action):
-        action_okay = True
-        if action == 'right':
-            if self.state[1] == 'red' and self.state[3] == 'forward':
-                action_okay = False
-        elif action == 'forward':
-            if self.state[1] == 'red':
-                action_okay = False
-        elif action == 'left':
-            if self.state[1] == 'red' or (self.state[2] == 'forward' or self.state[2] == 'right'):
-                action_okay = False
-        return action_okay
 
 def run():
     """Run the agent for a finite number of trials."""
