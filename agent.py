@@ -21,10 +21,17 @@ class LearningAgent(Agent):
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
-        self.alpha=0.5
-        self.gamma=0.5
+        self.alpha=0.9
+        self.gamma=0.9
         self.Q=multi_dimensions(2, Counter)
         self.actions=Environment.valid_actions
+        self.num_moves=0
+        self.reach_dest=0
+        self.current_trial=0
+        self.penalty = 0
+
+
+
 
 
 
@@ -44,16 +51,23 @@ class LearningAgent(Agent):
         #print(self.state)
 
         # TODO: Select action according to your policy
-        proposed_action=random.choice(Environment.valid_actions)
+
+        self.epsilon=1/float(t+self.current_trial+1)
+        #proposed_action=random.choice(Environment.valid_actions)
         self.Q[self.state][self.state[0]]=self.Q[self.state][self.state[0]]+0.1
-        maxQ=max(self.Q[self. state][next_action] for next_action in self.actions)
         Q_actions=[]
+        #Implementation of epsilon-greedy exploration vs explotation
+        if random.random() < self.epsilon:
+            proposed_action = random.choice(self.actions)
+            maxQ = self.Q[self.state][proposed_action]
+        else:
+            maxQ = max(self.Q[self.state][next_action] for next_action in self.actions)
         for next_action in self.actions:
             Q_actions.append(self.Q[self.state][next_action])
             if (self.Q[self.state][next_action]==maxQ):
                 proposed_action=next_action
                 #print("Q learing works",proposed_action)
-        #print (Q_actions)
+        #print (random.random(),self.epsilon)
 
 
 
@@ -64,7 +78,34 @@ class LearningAgent(Agent):
         #Learning policy implemented by recording the Q value to Q matrix for particular state
         self.Q[self.state][action] = (1.0 - self.alpha) * self.Q[self.state][action] + self.alpha * (
         reward + self.gamma * max(self.Q[next_state][next_action] for next_action in self.actions))
-        print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
+
+        # Statistics
+        self.num_moves += 1
+        add_total = False
+        if reward < 0:  # Assign penalty if reward is negative
+            self.penalty += 1
+            add_total = False
+        if deadline == 0:
+            add_total = True
+        if reward >= 10:  # agent has reached destination
+            self.reach_dest += 1
+            add_total = True
+        if add_total:
+            self.current_trial += 1
+        if self.current_trial>0: success_rate =  "{}/{} = %{}".format(self.reach_dest, self.current_trial,
+                                            (round(float(self.reach_dest) / float(self.current_trial), 3)) * 100)
+        else:
+            success_rate = "{}/{} = %{}".format(0, 0, 0)
+        if self.num_moves > 0:  penalty_ratio = "{}/{} = %{}".format(self.penalty, self.num_moves,
+                                             (round(float(self.penalty) / float(self.num_moves), 4)) * 100)
+        else:
+            penalty_ratio = "{}/{} = %{}".format(0,0,0)
+        if (t==0): print(success_rate, penalty_ratio)
+
+        print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs,
+                                                                                                    action,
+                                                                                                    reward)  # [debug]
+
 
 def run():
     """Run the agent for a finite number of trials."""
@@ -76,7 +117,8 @@ def run():
 
     # Now simulate it
     sim = Simulator(e, update_delay=1.0)  # reduce update_delay to speed up simulation
-    sim.run(n_trials=10)  # press Esc or close pygame window to quit
+    sim.run(n_trials=100)  # press Esc or close pygame window to quit
+
 
 
 
